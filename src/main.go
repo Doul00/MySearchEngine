@@ -14,8 +14,9 @@ func main() {
 	var pathToFile string
 
 	if len(args) < 1 {
-		fmt.Println("USAGE: ./main path_to_your_folder")
-		fmt.Println("or ./main path_to_your_folder index_save_filename")
+		fmt.Println("USAGE: To generate an index from your documents: \n ./main --create-index path_to_your_folder index_filename")
+		fmt.Println("To launch the search engine: \n ./main --search index_filename \n Then type your request in the format described in the README")
+		fmt.Println("For more information please consult the README")
 		panic("Please follow the usage")
 	}
 
@@ -34,7 +35,7 @@ func main() {
 	index := build(postings, processedDocs)
 	save(index, pathToIndexSave)
 	index = load(pathToIndexSave)
-	pages := search("action and christ")
+	pages := search("christians")
 	fmt.Println(pages)
 
 }

@@ -4,6 +4,8 @@
 *.so
 *.dylib
 *.DS_Store
+main
+20*
 
 # Test binary, build with `go test -c`
 *.test

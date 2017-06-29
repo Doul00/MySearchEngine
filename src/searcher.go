@@ -154,6 +154,7 @@ func checkTRule(sc *scanner.Scanner) Node {
 func search(word string) []string {
 	var ast Ast
 
+	word = strings.ToLower(word)
 	index := load(pathToIndexSave)
 	ast.root = makeAST(word)
 	docs := astSearch(ast, &index)
