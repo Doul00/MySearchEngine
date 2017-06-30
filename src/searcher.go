@@ -5,7 +5,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"text/scanner"
 )
 
 /*
@@ -61,12 +60,12 @@ func (nd BinOpNode) eval(index *Index) []int {
 }
 
 func (nd WordNode) eval(index *Index) []int {
-	return index.wordToDids[nd.value]
+	return generationSearch((*index).Generations, nd.value)
 }
 
 func (nd UnOpNode) eval(index *Index) []int {
 	var result []int
-	urlToDid := index.urlToDid
+	urlToDid := index.UrlToDid
 	dids := (*nd.left).eval(index)
 	didsMap := make(map[int]bool)
 
@@ -76,7 +75,7 @@ func (nd UnOpNode) eval(index *Index) []int {
 
 	for _, v := range urlToDid {
 		_, prs := didsMap[v]
-		if prs {
+		if !prs {
 			result = append(result, v)
 		}
 	}
@@ -85,77 +84,100 @@ func (nd UnOpNode) eval(index *Index) []int {
 }
 
 func load(path string) Index {
-	var urlMap map[string]int
-	var didMap map[int]string
-	var didsMap map[string][]int
+	var index Index
+
 	f, err := os.Open(path)
-	defer f.Close()
 	handleError(err, "Error while loading the index")
 
 	dec := gob.NewDecoder(f)
-	err = dec.Decode(&urlMap)
-	err = dec.Decode(&didMap)
-	err = dec.Decode(&didsMap)
+	err = dec.Decode(&index)
 	handleError(err, "Error while loading the index")
-	return Index{urlToDid: urlMap, didToUrl: didMap, wordToDids: didsMap}
+	f.Close()
+	return index
+}
+
+func generationSearch(generations []Generation, word string) []int {
+	for i := len(generations) - 1; i >= 0; i-- {
+		currMap := generations[i].WordsToDid
+		val, prs := currMap[word]
+
+		if prs {
+			return val
+		}
+	}
+
+	return []int{}
 }
 
 func makeAST(expression string) Node {
-	var sc scanner.Scanner
 	var root Node
-	sc.Init(strings.NewReader(expression))
-	root = checkExpRule(&sc)
+	var i = 0
+	root = checkExpRule(strings.Split(expression, " "), &i)
 	return root
 }
 
-func checkExpRule(sc *scanner.Scanner) Node {
+func checkExpRule(tokens []string, i *int) Node {
 	var tok string
-	var r rune
-	nd := checkTRule(sc)
-
-	r = (*sc).Scan()
-	if r == scanner.EOF {
+	nd := checkTRule(tokens, i)
+	if *i == len(tokens) {
 		return nd
 	}
+	tok = tokens[*i]
 
-	tok = (*sc).TokenText()
 	if strings.Compare(tok, "and") == 0 ||
 		strings.Compare(tok, "or") == 0 {
 		var bin BinOpNode
 		bin.opType = tok
 		bin.left = &nd
-		rightNode := checkExpRule(sc)
+		(*i)++
+		rightNode := checkExpRule(tokens, i)
 		bin.right = &rightNode
 
 		if bin.right == nil {
 			panic("Error while parsing the AST -- Exp rule")
 		}
-
 		return bin
 	}
 
-	return nil
+	return nd
 }
 
-func checkTRule(sc *scanner.Scanner) Node {
+func checkTRule(tokens []string, i *int) Node {
 	var tok string
 	re := regexp.MustCompile("[[:word:]]")
-	_ = (*sc).Scan()
-	tok = (*sc).TokenText()
+
+	tok = tokens[*i]
 
 	if re.MatchString(tok) {
-		nd := WordNode{value: tok}
-		return nd
+		if strings.Compare(tok, "not") == 0 {
+			nd := UnOpNode{opType: tok}
+			(*i)++
+			leftSon := checkExpRule(tokens, i)
+			nd.left = &leftSon
+			return nd
+		} else {
+			(*i)++
+			nd := WordNode{value: tok}
+			return nd
+		}
+	} else {
+		if strings.Compare(tok, "(") == 0 {
+			(*i)++
+			nd := checkExpRule(tokens, i)
+			tok = tokens[*i]
+			if strings.Compare(tok, ")") == 0 {
+				return nd
+			}
+		}
 	}
 
 	panic("Syntax Error -- T rule")
 }
 
-func search(word string) []string {
+func search(word string, index Index) []string {
 	var ast Ast
 
 	word = strings.ToLower(word)
-	index := load(pathToIndexSave)
 	ast.root = makeAST(word)
 	docs := astSearch(ast, &index)
 
@@ -167,7 +189,7 @@ func astSearch(ast Ast, index *Index) []string {
 	dids := ast.root.eval(index)
 
 	for _, value := range dids {
-		result = append(result, index.didToUrl[value])
+		result = append(result, index.DidToUrl[value])
 	}
 
 	return result

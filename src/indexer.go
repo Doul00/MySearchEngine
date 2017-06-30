@@ -15,16 +15,20 @@ type Posting struct {
 	url  []string
 }
 
+// Generation represents a version of the index
+type Generation struct {
+	WordsToDid map[string][]int
+}
+
 /* Index is the index of the search engine
 * urlToDid is a mapping of each url to its did
 * didToUrl is the inverse map of urlToDid, given a did we have the url
-* It is useful to get the documents from the dids after a search
-* wordToDids maps a word to list of documents containing it
+* generations is the list of all the index's generations
  */
 type Index struct {
-	urlToDid   map[string]int
-	didToUrl   map[int]string
-	wordToDids map[string][]int
+	UrlToDid    map[string]int
+	DidToUrl    map[int]string
+	Generations []Generation
 }
 
 /*
@@ -33,7 +37,7 @@ type Index struct {
 
 /*
 * @documents the list of documents and the words they contains
-* returns a list of postings
+* Returns a list of postings
  */
 func index(documents []TokenizedDocument) []Posting {
 	var postings []Posting
@@ -110,16 +114,23 @@ func createWordsToDid(didMap map[string]int, postings []Posting) map[string][]in
 	return result
 }
 
+func updateGeneration(postings []Posting, index *Index) {
+	wordsToDid := createWordsToDid((*index).UrlToDid, postings)
+	newGen := Generation{WordsToDid: wordsToDid}
+	(*index).Generations = append((*index).Generations, newGen)
+}
+
 /*
 * @postings the list of postings
 * @docs the list of tokenized documents
-* Returns the index containing the map of urls to dids and
+* Creates an index containing the map of urls to dids and
 * a map of words and the matching dids
  */
 func build(postings []Posting, docs []TokenizedDocument) Index {
 	urlToDID, didToURL := createDid(docs)
 	wordsToDid := createWordsToDid(urlToDID, postings)
-	return Index{urlToDid: urlToDID, didToUrl: didToURL, wordToDids: wordsToDid}
+	newGen := Generation{WordsToDid: wordsToDid}
+	return Index{UrlToDid: urlToDID, DidToUrl: didToURL, Generations: []Generation{newGen}}
 }
 
 /*
@@ -129,11 +140,10 @@ func build(postings []Posting, docs []TokenizedDocument) Index {
  */
 func save(index Index, path string) {
 	f, err := os.Create(path)
-	defer f.Close()
 
 	handleError(err, "Error saving the index at path:"+path)
 	enc := gob.NewEncoder(f)
-	enc.Encode(index.urlToDid)
-	enc.Encode(index.didToUrl)
-	enc.Encode(index.wordToDids)
+	err = enc.Encode(index)
+	handleError(err, "Error encoding the index:"+path)
+	f.Close()
 }
