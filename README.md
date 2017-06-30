@@ -37,3 +37,4 @@ For instance "not coding"
 - You can use the parenthesis, but **always** put a whitespace between the parenthesis and the word.
 There is no lexer so without whitespaces there will be an error!
 For instance "not ( hell and heaven )"
+- To **kill the prompt** type "exit" (without the brackets)
