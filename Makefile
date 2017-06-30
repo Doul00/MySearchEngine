@@ -1,9 +1,10 @@
-SRC= src/main.go src/document.go src/indexer.go src/searcher.go src/sliceUtils.go
+SRC= $(wildcard src/*.go)
+BIN=main
 
 all: build
 
 build:
-	go build ${SRC}
+	go build -o ${BIN} ${SRC}
 
 debug:
 	go build -gcflags "-N -l" ${SRC}
@@ -13,6 +14,6 @@ install:
 	go get golang.org/x/text/unicode/norm
 
 clean:
-	rm -rf bin/*
+	rm ${BIN}
 
 .PHONY: clean install

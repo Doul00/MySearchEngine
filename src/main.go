@@ -40,7 +40,7 @@ func main() {
 		documentsList := fetch(dir, true)
 
 		fmt.Println("Processing the documents...")
-		processedDocs := processDocuments(documentsList[:100])
+		processedDocs := processDocuments(documentsList)
 
 		postings = index(processedDocs)
 
