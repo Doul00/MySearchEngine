@@ -77,9 +77,25 @@ func main() {
 				os.Exit(0)
 			}
 			pages := search(query, index)
-			formatAnswers(pages)
+			formatAnswers(pages, true)
 		}
 
+	} else if strings.Compare(*mode, "exec") == 0 {
+		if len(*pathToIndexSave) == 0 {
+			usage("Please follow the usage.")
+		}
+
+		index := load(*pathToIndexSave)
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			line, _, err := reader.ReadLine()
+			if err != nil || len(line) == 0 {
+				break
+			}
+
+			pages := search(string(line), index)
+			formatAnswers(pages, false)
+		}
 	}
 
 }
@@ -91,8 +107,10 @@ func usage(message string) {
 	panic(message)
 }
 
-func formatAnswers(results []string) {
-	fmt.Println("\n" + strconv.Itoa(len(results)) + " result(s) found")
+func formatAnswers(results []string, inRepl bool) {
+	if inRepl {
+		fmt.Println("\n" + strconv.Itoa(len(results)) + " result(s) found")
+	}
 	for i := range results {
 		fmt.Println(results[i])
 	}
