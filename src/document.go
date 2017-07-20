@@ -21,7 +21,9 @@ import (
 
 // Document contains the information regarding a document
 type Document struct {
-	url, title, body string
+	Url   string `json:"url"`
+	Title string `json:"title"`
+	Body  string `json:"body"`
 }
 
 // TokenizedDocument contains the document and all its words
@@ -104,31 +106,32 @@ func (p DownCaseProcessor) process(str *string) {
 * @processors the processors transforming the data
 * Returns a document which text has been downcased and cleaned (no accents and other symbols)
  */
-func applyProcessors(document Document, processors []TextProcessor) TokenizedDocument {
-	processedTitle := document.title
-	processedBody := document.body
-
-	for _, p := range processors {
-		p.process(&processedTitle)
-		p.process(&processedBody)
-	}
-
-	re := regexp.MustCompile("[[:^word:]]")
-	processedTitle = re.ReplaceAllLiteralString(processedTitle, " ")
-	processedBody = re.ReplaceAllLiteralString(processedBody, " ")
+func processDocument(document Document, processors []TextProcessor) TokenizedDocument {
+	processedTitle := processText(document.Title, processors)
+	processedBody := processText(document.Body, processors)
 
 	return TokenizedDocument{
 		Title: createCounter(processedTitle),
 		Body:  createCounter(processedBody),
-		Url:   document.url}
+		Url:   document.Url}
+}
+
+func processText(text string, processors []TextProcessor) string {
+	for _, p := range processors {
+		p.process(&text)
+	}
+
+	re := regexp.MustCompile("[[:^word:]]")
+	return re.ReplaceAllLiteralString(text, " ")
 }
 
 func createCounter(text string) map[string]int {
 	splitText := strings.Split(text, " ")
-	// pre-allocation to half the size of the vocab (with duplicata).
-	counter := make(map[string]int, int(len(splitText)/2))
+	counter := make(map[string]int)
 	for _, word := range splitText {
-		counter[word]++
+		if len(word) != 0 && word != " " {
+			counter[word]++
+		}
 	}
 
 	return counter
@@ -139,16 +142,12 @@ func createCounter(text string) map[string]int {
 * Returns an array of processed documents
  */
 func processDocuments(documents *[]Document) []TokenizedDocument {
-
-	var processors []TextProcessor
 	var tokenizedDocs []TokenizedDocument
 
-	downCaseProcessor := DownCaseProcessor{}
-	accentProcessor := AccentProcessor{}
-	processors = append(processors, downCaseProcessor, accentProcessor)
+	processors := []TextProcessor{DownCaseProcessor{}, AccentProcessor{}}
 
 	for _, doc := range *documents {
-		tokenizedDocs = append(tokenizedDocs, applyProcessors(doc, processors))
+		tokenizedDocs = append(tokenizedDocs, processDocument(doc, processors))
 	}
 
 	return tokenizedDocs

@@ -20,8 +20,8 @@ type Generation struct {
 * generations is the list of all the index's generations
  */
 type Index struct {
-	TokDocs []TokenizedDocument
-	Posting map[string][]string
+	Url2docs map[string]TokenizedDocument
+	Posting  map[string][]string
 }
 
 /*
@@ -30,8 +30,19 @@ type Index struct {
 func buildIndex(docs []Document, index string) {
 	tokDocs := processDocuments(&docs)
 	posting := buildPosting(&tokDocs) // Map of words to list of urls
+	url2docs := mapDocuments(tokDocs)
 
-	save_index(&Index{tokDocs, posting}, index)
+	saveIndex(&Index{url2docs, posting}, index)
+}
+
+func mapDocuments(docs []TokenizedDocument) map[string]TokenizedDocument {
+	m := make(map[string]TokenizedDocument)
+
+	for _, doc := range docs {
+		m[doc.Url] = doc
+	}
+
+	return m
 }
 
 /*
@@ -74,11 +85,28 @@ func buildPosting(documents *[]TokenizedDocument) map[string][]string {
 * @path the file in which the index will be saved
 * Saves the index into a file using the goland 'gob' serializer
  */
-func save_index(index *Index, path string) {
+func saveIndex(index *Index, path string) {
 	f, err := os.Create(path)
 	defer f.Close()
 
 	handleError(err, "Error saving the index at path:"+path)
 	err = gob.NewEncoder(f).Encode(*index)
 	handleError(err, "Error encoding the index:"+path)
+}
+
+/*
+* @path the path to the index file
+* Deserializes the index
+ */
+func loadIndex(path string) *Index {
+	var index Index
+
+	f, err := os.Open(path)
+	defer f.Close()
+	handleError(err, "Error while loading the index")
+
+	err = gob.NewDecoder(f).Decode(&index)
+	handleError(err, "Error while loading the index")
+
+	return &index
 }

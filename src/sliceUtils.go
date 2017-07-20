@@ -13,9 +13,9 @@ package main
 * @l2 second slice
 * Returns the intersection of the two slices
  */
-func intersection(l1 []int, l2 []int) []int {
-	var result []int
-	tmpMap := make(map[int]int)
+func intersection(l1 []string, l2 []string) []string {
+	var result []string
+	tmpMap := make(map[string]int)
 
 	for _, value := range l1 {
 		tmpMap[value]++
@@ -39,9 +39,9 @@ func intersection(l1 []int, l2 []int) []int {
 * @l2 second slice
 * Returns the union of the two slices, without duplicates
  */
-func union(l1 []int, l2 []int) []int {
-	var result []int
-	tmpMap := make(map[int]int)
+func union(l1 []string, l2 []string) []string {
+	var result []string
+	tmpMap := make(map[string]int)
 
 	for _, value := range l1 {
 		tmpMap[value]++
@@ -63,7 +63,7 @@ func union(l1 []int, l2 []int) []int {
 * @list the list of values
 * Returns true if the value was found
  */
-func contains(x int, list []int) bool {
+func contains(x string, list []string) bool {
 	for _, value := range list {
 		if x == value {
 			return true

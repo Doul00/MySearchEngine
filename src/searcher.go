@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/gob"
-	"os"
 	"regexp"
 	"strings"
 )
@@ -24,7 +22,7 @@ type Ast struct {
 
 // Node is a interface for all the nodes composing the ast
 type Node interface {
-	eval(index *Index) []int
+	eval(index *Index) []string
 }
 
 // BinOpNode represents nodes with two operands
@@ -50,85 +48,48 @@ type WordNode struct {
 * Evaluates the expression of the node, based on its values and its sons values
 * an 'and' node will intersect the results, an 'or' node will join them
  */
-func (nd BinOpNode) eval(index *Index) []int {
-	var result []int
+func (nd BinOpNode) eval(index *Index) []string {
+	var urls []string
 	leftEval := (*nd.left).eval(index)
 	rightEval := (*nd.right).eval(index)
 
 	if strings.Compare(nd.opType, "and") == 0 {
-		result = intersection(leftEval, rightEval)
+		urls = intersection(leftEval, rightEval)
 	} else {
-		result = union(leftEval, rightEval)
+		urls = union(leftEval, rightEval)
 	}
 
-	return result
+	return urls
 }
 
 /*
 * @index the index
 * Returns the value of the word node
  */
-func (nd WordNode) eval(index *Index) []int {
-	return generationSearch((*index).Generations, nd.value)
+func (nd WordNode) eval(index *Index) []string {
+	return index.Posting[nd.value]
 }
 
 /*
 * @index the index
 * Negates the results of the node's son
  */
-func (nd UnOpNode) eval(index *Index) []int {
-	var result []int
-	urlToDid := index.UrlToDid
-	dids := (*nd.left).eval(index)
-	didsMap := make(map[int]bool)
+func (nd UnOpNode) eval(index *Index) []string {
+	var invertedResults []string
 
-	for _, value := range dids {
-		didsMap[value] = true
+	rawResults := make(map[string]bool)
+	for _, url := range (*nd.left).eval(index) {
+		rawResults[url] = true
 	}
 
-	for _, v := range urlToDid {
-		_, prs := didsMap[v]
+	for url := range index.Posting {
+		_, prs := rawResults[url]
 		if !prs {
-			result = append(result, v)
+			invertedResults = append(invertedResults, url)
 		}
 	}
 
-	return result
-}
-
-/*
-* @path the path to the index file
-* Deserializes the index
- */
-func load(path string) Index {
-	var index Index
-
-	f, err := os.Open(path)
-	handleError(err, "Error while loading the index")
-
-	dec := gob.NewDecoder(f)
-	err = dec.Decode(&index)
-	handleError(err, "Error while loading the index")
-	f.Close()
-	return index
-}
-
-/*
-* @generations the index's generations
-* @word the word to find in the generations
-* Looks for a word from the most recent generation to the oldests
- */
-func generationSearch(generations []Generation, word string) []int {
-	for i := len(generations) - 1; i >= 0; i-- {
-		currMap := generations[i].WordsToDid
-		val, prs := currMap[word]
-
-		if prs {
-			return val
-		}
-	}
-
-	return []int{}
+	return invertedResults
 }
 
 /*
@@ -216,12 +177,13 @@ func checkTRule(tokens []string, i *int) Node {
 * @index the index containing the documents information
 * Builds the Ast from the query and returns the results by evaluating it
  */
-func search(word string, index Index) []string {
+func search(query string, index *Index) []TokenizedDocument {
 	var ast Ast
 
-	word = strings.ToLower(word)
-	ast.root = makeAST(word)
-	docs := astSearch(ast, &index)
+	processors := []TextProcessor{DownCaseProcessor{}, AccentProcessor{}}
+	processedQuery := processText(query, processors)
+	ast.root = makeAST(processedQuery)
+	docs := astSearch(ast, index)
 
 	return docs
 }
@@ -231,12 +193,11 @@ func search(word string, index Index) []string {
 * @index the index
 * Evaluates the ast and returns the results
  */
-func astSearch(ast Ast, index *Index) []string {
-	var result []string
-	dids := ast.root.eval(index)
+func astSearch(ast Ast, index *Index) []TokenizedDocument {
+	var result []TokenizedDocument
 
-	for _, value := range dids {
-		result = append(result, index.DidToUrl[value])
+	for _, url := range ast.root.eval(index) {
+		result = append(result, index.Url2docs[url])
 	}
 
 	return result

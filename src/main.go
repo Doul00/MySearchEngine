@@ -19,9 +19,10 @@ func main() {
 	iData := indexCommands.String("path", "", "Path to the data to index.")
 	iIndex := indexCommands.String("index", "index", "Prefix names for the indexes.")
 	iNbGo := indexCommands.Int("go", 5, "Number of goroutines used to index the data.")
-	iMaxDoc := indexCommands.Int("max", 100, "Maximum number of documents to index in the data.")
+	iMaxDoc := indexCommands.Int("max", -1, "Maximum number of documents to index in the data.")
 
 	sIndex := searchCommands.String("index", "index", "Path of index's folder.")
+	sQuery := searchCommands.String("query", "", "The query.")
 	sNbGo := searchCommands.Int("go", 5, "Number of goroutines used to search throught the indexes.")
 
 	if len(os.Args) <= 1 {
@@ -36,7 +37,7 @@ func main() {
 
 	case "search":
 		searchCommands.Parse(os.Args[2:])
-		searchEngine(*sIndex, *sNbGo)
+		searchEngine(*sIndex, *sQuery, *sNbGo)
 
 	default:
 		fmt.Println("Indexeur: 'index'")
@@ -47,7 +48,7 @@ func main() {
 	}
 }
 
-func indexCreation(dataPath, index string, nbGo int, maxDoc int) {
+func indexCreation(dataPath, index string, nbGo, maxDoc int) {
 	data, err := os.Open(dataPath)
 	if err != nil {
 		panic(err)
@@ -78,7 +79,7 @@ func indexCreation(dataPath, index string, nbGo int, maxDoc int) {
 
 	scanner := bufio.NewScanner(data)
 	for i := 0; scanner.Scan(); i++ {
-		if i >= maxDoc {
+		if maxDoc != -1 && i >= maxDoc {
 			break
 		}
 		docChans[i%nbGo] <- scanner.Text()
@@ -93,20 +94,19 @@ func indexCreation(dataPath, index string, nbGo int, maxDoc int) {
 }
 
 func workerIndex(docChan <-chan string, stopChan <-chan bool, wg *sync.WaitGroup, index string) {
-	docs := make([]Document, 10)
-	is_done := false
+	var docs []Document
+	isDone := false
 
 	for true {
 		select {
 		case <-stopChan:
-			is_done = true
+			isDone = true
 			break
 		case rawDoc := <-docChan:
 			docs = append(docs, createDocument(rawDoc))
-
 		}
 
-		if is_done {
+		if isDone {
 			break
 		}
 	}
@@ -115,8 +115,14 @@ func workerIndex(docChan <-chan string, stopChan <-chan bool, wg *sync.WaitGroup
 	wg.Done()
 }
 
-func searchEngine(index string, nbGo int) {
+func searchEngine(indexPath, query string, nbGo int) {
+	index := loadIndex(indexPath)
+	docs := search(query, index)
 
+	fmt.Println("Found ", len(docs))
+	for _, doc := range docs {
+		fmt.Println(doc.Title, doc.Url)
+	}
 }
 
 func usage(message string) {
