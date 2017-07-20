@@ -1,5 +1,5 @@
 SRC= $(wildcard src/*.go)
-BIN=main
+BIN=myGoogle
 
 all: build
 
@@ -14,6 +14,7 @@ install:
 	go get golang.org/x/text/unicode/norm
 
 clean:
-	rm ${BIN}
+	${RM} ${BIN}
+	${RM} *.idx
 
 .PHONY: clean install

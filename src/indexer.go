@@ -9,12 +9,6 @@ import (
 * Structs
  */
 
-// Posting maps a word to the list of documents containing it
-type Posting struct {
-	word string
-	url  []string
-}
-
 // Generation represents a version of the index
 type Generation struct {
 	WordsToDid map[string][]int
@@ -26,111 +20,53 @@ type Generation struct {
 * generations is the list of all the index's generations
  */
 type Index struct {
-	UrlToDid    map[string]int
-	DidToUrl    map[int]string
-	Generations []Generation
+	TokDocs []TokenizedDocument
+	Posting map[string][]string
 }
 
 /*
 * Functions
  */
+func buildIndex(docs []Document, index string) {
+	tokDocs := processDocuments(&docs)
+	posting := buildPosting(&tokDocs) // Map of words to list of urls
+
+	save_index(&Index{tokDocs, posting}, index)
+}
 
 /*
 * @documents the list of documents and the words they contains
 * Returns a list of postings
  */
-func index(documents []TokenizedDocument) []Posting {
-	var postings []Posting
-	var strMap = make(map[string][]string)
+func buildPosting(documents *[]TokenizedDocument) map[string][]string {
+	posting := make(map[string][]string)
 
-	for _, doc := range documents {
-		// Prevents adding the same document twice
-		var insertionMap = make(map[string]bool)
+	for _, doc := range *documents {
+		// Prevents adding the same document several times.
+		var flagInsertion = make(map[string]bool)
 
-		for _, word := range doc.words {
-			_, prs := strMap[word]
-			_, isInserted := insertionMap[word]
+		for word := range doc.Title {
+			_, isInserted := flagInsertion[word]
 
-			if !prs && !isInserted {
-				newUrls := []string{doc.url}
-				strMap[word] = newUrls
-			} else if prs && !isInserted {
-				strMap[word] = append(strMap[word], doc.url)
+			if len(posting[word]) == 0 && !isInserted {
+				posting[word] = []string{doc.Url}
+			} else if !isInserted {
+				posting[word] = append(posting[word], doc.Url)
 			}
-			insertionMap[word] = true
+		}
+
+		for word := range doc.Body {
+			_, isInserted := flagInsertion[word]
+
+			if len(posting[word]) == 0 && !isInserted {
+				posting[word] = []string{doc.Url}
+			} else if !isInserted {
+				posting[word] = append(posting[word], doc.Url)
+			}
 		}
 	}
 
-	for k, v := range strMap {
-		newPosting := Posting{word: k, url: v}
-		postings = append(postings, newPosting)
-	}
-
-	return postings
-}
-
-/*
-* @docs the list of TokenizedDocuments
-* Returns a map containing, for each url, the corresponding did
- */
-func createDid(docs []TokenizedDocument) (map[string]int, map[int]string) {
-	m := make(map[string]int)
-	inversedM := make(map[int]string)
-	did := 0
-
-	for _, doc := range docs {
-		m[doc.url] = did
-		inversedM[did] = doc.url
-		did++
-	}
-	return m, inversedM
-}
-
-/*
-* @didMap the link of every url to its did
-* @urls the urls to convert to a list of the corresponding dids
-* Returns the list of dids corresponding to the urls
- */
-func urlsToDids(didMap map[string]int, urls []string) []int {
-	var res = make([]int, len(urls))
-
-	for i, str := range urls {
-		res[i] = didMap[str]
-	}
-	return res
-}
-
-/*
-* @didMap the link of every url to its did
-* @postings the list of postings
-* Returns a map containing a list of document dids for each word
- */
-func createWordsToDid(didMap map[string]int, postings []Posting) map[string][]int {
-	result := make(map[string][]int)
-
-	for _, posting := range postings {
-		result[posting.word] = urlsToDids(didMap, posting.url)
-	}
-	return result
-}
-
-func updateGeneration(postings []Posting, index *Index) {
-	wordsToDid := createWordsToDid((*index).UrlToDid, postings)
-	newGen := Generation{WordsToDid: wordsToDid}
-	(*index).Generations = append((*index).Generations, newGen)
-}
-
-/*
-* @postings the list of postings
-* @docs the list of tokenized documents
-* Creates an index containing the map of urls to dids and
-* a map of words and the matching dids
- */
-func build(postings []Posting, docs []TokenizedDocument) Index {
-	urlToDID, didToURL := createDid(docs)
-	wordsToDid := createWordsToDid(urlToDID, postings)
-	newGen := Generation{WordsToDid: wordsToDid}
-	return Index{UrlToDid: urlToDID, DidToUrl: didToURL, Generations: []Generation{newGen}}
+	return posting
 }
 
 /*
@@ -138,12 +74,11 @@ func build(postings []Posting, docs []TokenizedDocument) Index {
 * @path the file in which the index will be saved
 * Saves the index into a file using the goland 'gob' serializer
  */
-func save(index Index, path string) {
+func save_index(index *Index, path string) {
 	f, err := os.Create(path)
+	defer f.Close()
 
 	handleError(err, "Error saving the index at path:"+path)
-	enc := gob.NewEncoder(f)
-	err = enc.Encode(index)
+	err = gob.NewEncoder(f).Encode(*index)
 	handleError(err, "Error encoding the index:"+path)
-	f.Close()
 }

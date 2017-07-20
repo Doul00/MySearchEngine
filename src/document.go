@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"regexp"
 	"strings"
 	"unicode"
 
 	"io"
+
+	"encoding/json"
 
 	"golang.org/x/text/runes"
 	"golang.org/x/text/transform"
@@ -20,13 +21,13 @@ import (
 
 // Document contains the information regarding a document
 type Document struct {
-	text, url string
+	url, title, body string
 }
 
 // TokenizedDocument contains the document and all its words
 type TokenizedDocument struct {
-	words []string
-	url   string
+	Title, Body map[string]int
+	Url         string
 }
 
 // TextProcessor is a interface for all processors
@@ -70,78 +71,10 @@ func toUtf8(input []byte) string {
 	return string(buf)
 }
 
-/*
-* @path is the path to the file to read
-* Returns a document contenaining the text read
- */
-func readFile(path string) Document {
-	text, err := ioutil.ReadFile(path)
-	handleError(err, "Cannot read file at path: "+path)
-	doc := Document{url: path, text: toUtf8(text)}
+func createDocument(rawDoc string) Document {
+	var doc Document
+	json.Unmarshal([]byte(rawDoc), &doc)
 	return doc
-}
-
-/*
-* @path is the path to the file or to the folder
-* Returns an array of pointers to the documents created
- */
-func getDirDocuments(path string) []*Document {
-
-	var result []*Document
-
-	files, err := ioutil.ReadDir(path)
-	handleError(err, "Cannot read directory at path: "+path)
-
-	for _, f := range files {
-		var tmpList []*Document
-
-		if f.IsDir() {
-			tmpList = getDirDocuments(path + "/" + f.Name())
-		} else {
-			doc := readFile(path + "/" + f.Name())
-			tmpList = append(tmpList, &doc)
-		}
-
-		result = append(result, tmpList...)
-	}
-	return result
-}
-
-/*
-* @recursive if true, fetch goes into directories
-* @path is the path to the folder
-* Returns a slice containing pointers to documents
- */
-func fetch(path string, recursive bool) []*Document {
-
-	var result []*Document
-
-	// Open the directory and iterates through the files
-	files, err := ioutil.ReadDir(path)
-	handleError(err, "Cannot open directory at: "+path)
-
-	for _, f := range files {
-		var tmpList []*Document
-		var doc Document
-
-		if f.IsDir() && recursive {
-			tmpList = getDirDocuments(path + "/" + f.Name())
-		} else if !f.IsDir() {
-			// Skips OSX hidden files (.DS_Store)
-			if f.Name()[0] != '.' {
-				doc = readFile(path + "/" + f.Name())
-			} else {
-				continue
-			}
-		}
-
-		if len(tmpList) > 0 {
-			result = append(result, tmpList...)
-		} else if &doc != nil {
-			result = append(result, &doc)
-		}
-	}
-	return result
 }
 
 /*
@@ -171,24 +104,41 @@ func (p DownCaseProcessor) process(str *string) {
 * @processors the processors transforming the data
 * Returns a document which text has been downcased and cleaned (no accents and other symbols)
  */
-func analyse(document Document, processors []TextProcessor) TokenizedDocument {
+func applyProcessors(document Document, processors []TextProcessor) TokenizedDocument {
+	processedTitle := document.title
+	processedBody := document.body
 
-	processedText := document.text
 	for _, p := range processors {
-		p.process(&processedText)
+		p.process(&processedTitle)
+		p.process(&processedBody)
 	}
 
 	re := regexp.MustCompile("[[:^word:]]")
-	processedText = re.ReplaceAllLiteralString(processedText, " ")
+	processedTitle = re.ReplaceAllLiteralString(processedTitle, " ")
+	processedBody = re.ReplaceAllLiteralString(processedBody, " ")
 
-	return TokenizedDocument{url: document.url, words: strings.Split(processedText, " ")}
+	return TokenizedDocument{
+		Title: createCounter(processedTitle),
+		Body:  createCounter(processedBody),
+		Url:   document.url}
+}
+
+func createCounter(text string) map[string]int {
+	splitText := strings.Split(text, " ")
+	// pre-allocation to half the size of the vocab (with duplicata).
+	counter := make(map[string]int, int(len(splitText)/2))
+	for _, word := range splitText {
+		counter[word]++
+	}
+
+	return counter
 }
 
 /*
 * @documents The list of documents to process
 * Returns an array of processed documents
  */
-func processDocuments(documents []*Document) []TokenizedDocument {
+func processDocuments(documents *[]Document) []TokenizedDocument {
 
 	var processors []TextProcessor
 	var tokenizedDocs []TokenizedDocument
@@ -197,8 +147,8 @@ func processDocuments(documents []*Document) []TokenizedDocument {
 	accentProcessor := AccentProcessor{}
 	processors = append(processors, downCaseProcessor, accentProcessor)
 
-	for _, doc := range documents {
-		tokenizedDocs = append(tokenizedDocs, analyse(*doc, processors))
+	for _, doc := range *documents {
+		tokenizedDocs = append(tokenizedDocs, applyProcessors(doc, processors))
 	}
 
 	return tokenizedDocs
