@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 )
@@ -22,7 +23,6 @@ func main() {
 	iMaxDoc := indexCommands.Int("max", -1, "Maximum number of documents to index in the data.")
 
 	sIndex := searchCommands.String("index", "index", "Path of index's folder.")
-	sQuery := searchCommands.String("query", "", "The query.")
 	sNbGo := searchCommands.Int("go", 5, "Number of goroutines used to search throught the indexes.")
 
 	if len(os.Args) <= 1 {
@@ -37,7 +37,7 @@ func main() {
 
 	case "search":
 		searchCommands.Parse(os.Args[2:])
-		searchEngine(*sIndex, *sQuery, *sNbGo)
+		searchEngine(*sIndex, *sNbGo)
 
 	default:
 		fmt.Println("Indexeur: 'index'")
@@ -115,14 +115,26 @@ func workerIndex(docChan <-chan string, stopChan <-chan bool, wg *sync.WaitGroup
 	wg.Done()
 }
 
-func searchEngine(indexPath, query string, nbGo int) {
-	index := loadIndex(indexPath)
-	docs := search(query, index)
-
-	fmt.Println("Found ", len(docs))
-	for _, doc := range docs {
-		fmt.Println(doc.Title, doc.Url)
+func loadAllIndex(pattern string) []*Index {
+	matches, err := filepath.Glob(pattern)
+	if err != nil || len(matches) == 0 {
+		panic(err)
 	}
+
+	var indexes []*Index
+	for _, match := range matches {
+		indexes = append(indexes, loadIndex(match))
+	}
+
+	return indexes
+}
+
+func searchEngine(indexPath string, nbGo int) {
+	indexes := loadAllIndex(indexPath)
+
+	scanner := bufio.NewScanner(os.Stdin)
+
+	startDispatching(scanner, indexes, nbGo)
 }
 
 func usage(message string) {
@@ -132,11 +144,8 @@ func usage(message string) {
 	panic(message)
 }
 
-func formatAnswers(results []string, inRepl bool) {
-	if inRepl {
-		fmt.Println("\n" + strconv.Itoa(len(results)) + " result(s) found")
-	}
-	for i := range results {
-		fmt.Println(results[i])
+func printResults(ans []TokenizedDocument) {
+	for _, doc := range ans {
+		fmt.Println(doc.Url)
 	}
 }
