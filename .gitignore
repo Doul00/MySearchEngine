@@ -20,3 +20,4 @@ main
 *.txt
 *.idx
 myGoogle
+.vscode
