@@ -10,9 +10,6 @@ import (
 	"sync"
 )
 
-// Package global variable to get the file where the index is saved
-var pathToIndexSave *string
-
 func main() {
 	indexCommands := flag.NewFlagSet("index", flag.ExitOnError)
 	searchCommands := flag.NewFlagSet("search", flag.ExitOnError)
